@@ -146,10 +146,12 @@ class Main:
     Creating a class could work?
     """
     def music(self):
-        if not pygame.mixer.music.get_busy(): # Python audio playing is dumb
+    	if not pygame.mixer.music.get_busy(): # Python audio playing is dumb
             if mode[level] == 0 or mode[level] == 1:
                 pygame.mixer.music.load(TITLE_MUSIC)
                 pygame.mixer.music.play(-1, 0.0, 1500)
+                
+
             if mode[level] == 3 and not pause:
             	pygame.mixer.music.load(STAGE_1)
             	pygame.mixer.music.play(-1, 0.0, 1500)    
@@ -218,16 +220,16 @@ class Main:
     	global menu_bool
     	global pause
     	global used_continue
-    	plr_vel = 10
+    	
     	# Controls
     	if not pause:
-    		if keys[pygame.K_UP]:
+    		if keys[pygame.K_UP] and self.player.y >= 0:
     			self.player.y -= self.player.speed
-    		if keys[pygame.K_DOWN]:
+    		if keys[pygame.K_DOWN] and self.player.y <= (HEIGHT - self.player.img.get_height() ):
     			self.player.y += self.player.speed
-    		if keys[pygame.K_LEFT]:
+    		if keys[pygame.K_LEFT] and self.player.x >= 0:
     			self.player.x -= self.player.speed
-    		if keys[pygame.K_RIGHT]:
+    		if keys[pygame.K_RIGHT] and self.player.x <= ( (WIDTH / 1.5) - self.player.img.get_width() ) :
     			self.player.x += self.player.speed
     		if keys[pygame.K_x]: # Bomb
     			pass 
