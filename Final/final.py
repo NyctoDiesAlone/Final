@@ -6,6 +6,8 @@ environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 import pygame
 import os
 import time
+import pymunk
+
 pygame.init()
 pygame.mixer.init()
 pygame.font.init()
@@ -25,7 +27,7 @@ CURSOR = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Cursor
 DISPLAY_PIC = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Cursor.png')), (32, 32)) # Small Window Img 
 pygame.display.set_icon(DISPLAY_PIC)
 
-text_font_credit = pygame.font.Font("Rage.ttf", 15)
+text_font_credit = pygame.font.SysFont("Ariel", 15)
 text_font_description = pygame.font.Font("Rage.ttf", 40)
 """
 Drawn on top of background assets
@@ -49,13 +51,21 @@ SHOT_OFFENSE = pygame.transform.scale(pygame.image.load(os.path.join('Assets', '
 
 # Gameplay
 INFO_PANEL = pygame.image.load(os.path.join('Assets', 'Info_Panel.png'))
-RESOURCE = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Resource.png')), (25, 25))
+# RESOURCE = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Resource.png')), (25, 25))
 
-FAIRY1 = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Fairy1.png')), (25, 25)) # Dark
-FAIRY2 = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Fairy2.png')), (25, 25)) # Light
+FAIRY1 = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Fairy1.png')), (70, 70)) # Dark
+FAIRY2 = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Fairy2.png')), (70, 70)) # Light
 
 PLACEHOLDER = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Test_Asset.png')), (40, 80))
+ATTACK = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Test_Asset.png')), (120, 60))
 HITBOX = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Hitbox.png')), (15, 15))
+
+player_rect = PLACEHOLDER.get_rect()
+player_mask = pygame.mask.from_surface(PLACEHOLDER)
+
+FAIRY1_rect = FAIRY1.get_rect()
+bullet_mask = pygame.mask.from_surface(FAIRY1)
+
 # Level Backgrounds
 STAGE_1_BG = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'STAGE_1.png')), (WIDTH / 1.5, HEIGHT))
 
@@ -73,10 +83,17 @@ menu_bool = False
 # Gameplay 
 pause = False
 used_continue = False
+respawn = False
 shot_type_a = True 
 
 lives_total = [0, 1, 2, 3, 4, 5, 6] # 6 max lives is reasonable
 lives_current = 3 # Start with 3 lives, 0 is a game over
+lives_display = str(lives_current)
+
+bombs_total = [0, 1, 2, 3, 4, 5, 6] # 6 max bombs
+bombs_current = 2 # Start with 2 bombs
+bombs_display = str(bombs_current)
+
 
 """CONTROLS"""
 """ RUNTIME BY FRAMES FOR TESTING """
@@ -121,16 +138,53 @@ class Text_Draw:
 		WIN.blit(img_text, (self.x, self.y))
 
 class Entity:
-	def __init__(self, img, x, y, speed, health=10):
+	def __init__(self, img, x, y, speed, health=0):
 		self.img = img
 		self.x = x 
 		self.y = y 
 		self.health = health
 		self.speed = speed
 	def draw(self):
-		WIN.blit(self.img, (self.x, self.y))
-		if keys[pygame.K_LSHIFT]: # Draws Hitbox
-			WIN.blit(HITBOX, (self.x + (int(self.img.get_width()) / 2) - 6, (self. y + (int(self.img.get_height()) / 2) - 2) ) )
+		WIN.blit(self.img, (self.x, self.y))	
+	def get_center_pos(self):
+		return ((self.x - (self.img.get_width() / 2) - 20), (self.y - (self.img.get_height() / 2)) )
+
+class Reimu(Entity):
+    def __init__(self, img, x, y, speed):
+        super().__init__(img, x, y, speed) 
+
+
+    def draw(self):
+        super().draw()
+        if keys[pygame.K_LSHIFT]: # Draws Hitbox
+        	WIN.blit(HITBOX, (self.x + (int(self.img.get_width()) / 2) - 6, (self. y + (int(self.img.get_height()) / 2) - 2) ) )
+        if keys[pygame.K_z]: # Draws Attack
+        	WIN.blit(ATTACK, (self.x - (self.img.get_width() / 2) - 20, self.y - (self.img.get_height() / 2) ))
+    def collision(self):
+    	self.damn_hitbox = pygame.mask.from_surface(HITBOX)
+    	return self.damn_hitbox
+    def collision_pos(self):
+    	self.player_rect = HITBOX.get_rect()
+    	return self.player_rect
+
+
+
+class Enemy(Entity):
+    def __init__(self, img, x, y, speed, health, type_):
+        super().__init__(img, x, y, speed, health)
+        self.type_ = type_
+
+    
+    def draw(self):
+        super().draw()
+
+    def collision(self):
+    	self.torment = pygame.mask.from_surface(self.img)
+    	return self.torment
+    def collision_pos(self):
+    	self.bullet_rect = self.img.get_rect()
+    	return self.bullet_rect
+
 
 
 class Main:
@@ -138,26 +192,32 @@ class Main:
         # Is this my eternal punishment?
         self.cursor = Cursor_Class(WIDTH - 300, int(HEIGHT / 2) + 25)
 
-        self.player = Entity(PLACEHOLDER, 240, 500, 10)
+        self.player = Reimu(PLACEHOLDER, 200, 500, 10)
+        self.player_hitbox = self.player.collision()
+        self.player_hitbox_pos = self.player.collision_pos()
+
+        self.bullet = Enemy(PLACEHOLDER, 0, 0, 0, 10, 0)
+        self.bullet_hitbox = self.bullet.collision()
+        self.bullet_hitbox_pos = self.bullet.collision_pos()
+
+        self.current_music = None
+
     
 
-    """
-    Doesnt play SFX, so overlapping sounds and switching tracks might be a problem.
-    Creating a class could work?
-    """
+    # This is why we cant have nice things
     def music(self):
-    	if not pygame.mixer.music.get_busy(): # Python audio playing is dumb
-            if mode[level] == 0 or mode[level] == 1:
+        if mode[level] == 0 or mode[level] == 1:
+            if self.current_music is not TITLE_MUSIC:
                 pygame.mixer.music.load(TITLE_MUSIC)
                 pygame.mixer.music.play(-1, 0.0, 1500)
-                
-
-            if mode[level] == 3 and not pause:
-            	pygame.mixer.music.load(STAGE_1)
-            	pygame.mixer.music.play(-1, 0.0, 1500)    
+                self.current_music = TITLE_MUSIC
             
-
-
+        elif mode[level] == 3 and not pause:
+            if self.current_music is not STAGE_1:
+                pygame.mixer.music.load(STAGE_1)
+                pygame.mixer.music.play(-1, 0.0, 1500)    
+                self.current_music = STAGE_1  
+	    	  
     def menu_control(self):
         global keys
         global mode
@@ -220,9 +280,12 @@ class Main:
     	global menu_bool
     	global pause
     	global used_continue
-    	
-    	# Controls
-    	if not pause:
+    	global respawn
+
+    	if not pause and not menu_bool:
+    		if self.player_hitbox.overlap(self.bullet_hitbox, (self.player_hitbox_pos[0] - self.bullet_hitbox_pos[0], self.player_hitbox_pos[1] - self.bullet_hitbox_pos[1])):
+    			print("mad")
+    		
     		if keys[pygame.K_UP] and self.player.y >= 0:
     			self.player.y -= self.player.speed
     		if keys[pygame.K_DOWN] and self.player.y <= (HEIGHT - self.player.img.get_height() ):
@@ -254,8 +317,17 @@ class Main:
 					
     def draw_screen(self):
         global menu_bool
+        global pause
         control_txt_1 = Text_Draw(280, HEIGHT - 40)
         control_txt_2 = Text_Draw(280, HEIGHT - 20)
+
+        def draw_ui():
+        	WIN.blit(INFO_PANEL, (WIDTH - (WIDTH / 3), 0))
+        	UI_LIVES.draw_large("Lives: ", (0, 0, 0))
+        	life_text.draw_large(lives_display, (0, 255, 0))
+        	
+        	UI_BOMBS.draw_large("Bombs: [X]", (0, 0, 0))
+        	bomb_text.draw_large(bombs_display, (0, 255, 0))
 
 
         if mode[level] == 0: # Main Menu
@@ -271,7 +343,6 @@ class Main:
             WIN.blit(TITLE_QUIT, (WIDTH - 250, int(HEIGHT / 2) + 190))
 
             control_txt_1.draw_small("Press arrow keys to move cursor. Enter to select.", (0, 0, 0))
-            
             
             # Misc
             self.cursor.draw()
@@ -351,19 +422,17 @@ class Main:
         if not menu_bool: 
 
         	UI_LIVES = Text_Draw(550, 30)
+        	life_text = Text_Draw(570, 55)
         	UI_BOMBS = Text_Draw(550, 90)
+        	bomb_text = Text_Draw(570, 115)
+        	if not pause:
+        		if mode[level] == 3:
+        			WIN.blit(STAGE_1_BG, (0, 0))
 
-        	if mode[level] == 3:
-        		WIN.blit(STAGE_1_BG, (0, 0))
+        			self.player.draw()
+        			self.bullet.draw()
 
-        		self.player.draw()
-
-        		WIN.blit(INFO_PANEL, (WIDTH - (WIDTH / 3), 0))
-        		UI_LIVES.draw_large("Lives: ", (0, 0, 0))
-        		WIN.blit(RESOURCE, (580, 65))
-        		UI_BOMBS.draw_large("Bombs: [X]", (0, 0, 0))
-
-
+        			draw_ui()
 
 
         pygame.display.flip()
