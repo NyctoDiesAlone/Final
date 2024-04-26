@@ -7,6 +7,7 @@ import pygame
 import os
 import time
 import pymunk
+import math
 
 pygame.init()
 pygame.mixer.init()
@@ -56,15 +57,16 @@ INFO_PANEL = pygame.image.load(os.path.join('Assets', 'Info_Panel.png'))
 FAIRY1 = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Fairy1.png')), (70, 70)) # Dark
 FAIRY2 = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Fairy2.png')), (70, 70)) # Light
 
+
 PLACEHOLDER = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Test_Asset.png')), (40, 80))
 ATTACK = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Test_Asset.png')), (120, 60))
 HITBOX = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'Hitbox.png')), (15, 15))
 
-player_rect = PLACEHOLDER.get_rect()
-player_mask = pygame.mask.from_surface(PLACEHOLDER)
+player_rect = HITBOX.get_rect()
+#player_mask = pygame.mask.from_surface(PLACEHOLDER)
 
 FAIRY1_rect = FAIRY1.get_rect()
-bullet_mask = pygame.mask.from_surface(FAIRY1)
+#bullet_mask = pygame.mask.from_surface(FAIRY1)
 
 # Level Backgrounds
 STAGE_1_BG = pygame.transform.scale(pygame.image.load(os.path.join('Assets', 'STAGE_1.png')), (WIDTH / 1.5, HEIGHT))
@@ -144,9 +146,10 @@ class Entity:
         self.x = x
         self.y = y
         self.health = health
-        self.speed = speed
+        self.speed = speed * (10 ^ -3)
 
         self.rect = self.img.get_rect()
+        
 
     def draw(self):
         self.rect.topleft = (self.x, self.y)
@@ -175,32 +178,37 @@ class Reimu(Entity):
     def __init__(self, img, x, y, speed):
         super().__init__(img, x, y, speed)
 
-        self.hitbox_rect = HITBOX.get_rect()
+        self.rect = HITBOX.get_rect()
 
     def draw(self):
         super().draw()
-        self.hitbox_rect.topleft = self.get_center_pos()
+        self.rect.topleft = self.get_center_pos()
 
         if keys[pygame.K_LSHIFT]: # Draws Hitbox
-            WIN.blit(HITBOX, self.hitbox_rect)
+            WIN.blit(HITBOX, self.rect)
         if keys[pygame.K_z]: # Draws Attack
             WIN.blit(ATTACK, (self.x - (self.img.get_width() / 2) - 20, self.y - (self.img.get_height() / 2) ))
 
-class Enemy(Entity):
-    def __init__(self, img, x, y, speed, health, type_):
-        super().__init__(img, x, y, speed, health)
-        self.type_ = type_
+class Bullet(pygame.Rect):
+    def __init__(self, x, y, width, height, speed):
+        super().__init__(x, y, width, height)
+        self.speed = speed
+        self.color = (255, 0, 0)
 
-    def draw(self):
-        super().draw()
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self)
+
+    def move(self):
+        self.y += self.speed
 
 class Main:
     def __init__(self):
         # Is this my eternal punishment?
         self.cursor = Cursor_Class(WIDTH - 300, int(HEIGHT / 2) + 25)
 
+        self.bullets = []
+
         self.player = Reimu(PLACEHOLDER, 200, 500, 10)
-        self.bullet = Enemy(FAIRY1, 0, 0, 0, 10, 0)
 
         self.current_music = None
 
@@ -273,47 +281,7 @@ class Main:
                     if self.cursor.y == 50:
                         level = 3
 
-    def gameplay(self):
-        global keys
-        global mode
-        global level
-        global menu_bool
-        global pause
-        global used_continue
-        global respawn
-
-        if not pause and not menu_bool:
-            #print("player hitbox rect", self.player.hitbox_rect)
-            #print("bullet rect", self.bullet.rect)
-            print("player hitbox rect colliding with bullet rect?", self.player.hitbox_rect.colliderect(self.bullet.rect))
-
-            if keys[pygame.K_UP]:
-                self.player.move_up()
-            if keys[pygame.K_DOWN]:
-                self.player.move_down()
-            if keys[pygame.K_LEFT]:
-                self.player.move_left()
-            if keys[pygame.K_RIGHT]:
-                self.player.move_right()
-            if keys[pygame.K_x]: # Bomb
-                pass
-            if keys[pygame.K_z]: # Attack
-                pass
-
-            if keys[pygame.K_LSHIFT]: # Slow
-                self.player.speed = 5
-            else:
-                self.player.speed = 10
-            if keys[pygame.K_ESCAPE]: # Pause
-                pause = True
-        if pause:
-            menu_bool = True
-            if keys[pygame.K_UP]:
-                pass
-            if keys[pygame.K_DOWN]:
-                pass
-            if keys[pygame.K_RETURN]:
-                pass
+    
 
 
     def draw_screen(self):
@@ -429,20 +397,73 @@ class Main:
             if not pause:
                 if mode[level] == 3:
                     WIN.blit(STAGE_1_BG, (0, 0))
-
                     self.player.draw()
-                    self.bullet.draw()
+                        
 
                     draw_ui()
 
+        def gameplay():
+            global keys
+            global mode
+            global level
+            global menu_bool
+            global pause
+            global used_continue
+            global respawn
 
+            if not pause and not menu_bool:
+                #print("player hitbox rect", self.player.hitbox_rect)
+                #print("bullet rect", self.bullet.rect)
+                for bullet in self.bullets:
+                    bullet.move()
+                    bullet.draw(WIN)
+
+                    # Check for collision with player
+                    if bullet.colliderect(self.player):
+                        
+                        print("Collision detected!")
+
+                if pygame.time.get_ticks() % 30 == 0:
+                    new_bullet = Bullet(350, 0, 10, 10, 5)  
+                    self.bullets.append(new_bullet)
+
+
+                if keys[pygame.K_UP]:
+                    self.player.move_up()
+                if keys[pygame.K_DOWN]:
+                    self.player.move_down()
+                if keys[pygame.K_LEFT]:
+                    self.player.move_left()
+                if keys[pygame.K_RIGHT]:
+                    self.player.move_right()
+                if keys[pygame.K_x]: # Bomb
+                    pass
+                if keys[pygame.K_z]: # Attack
+                    pass
+
+                if keys[pygame.K_LSHIFT]: # Slow
+                    self.player.speed = 5
+                else:
+                    self.player.speed = 10
+                if keys[pygame.K_ESCAPE]: # Pause
+                    pause = True
+            if pause:
+                menu_bool = True
+                if keys[pygame.K_UP]:
+                    pass
+                if keys[pygame.K_DOWN]:
+                    pass
+                if keys[pygame.K_RETURN]:
+                    pass
+
+        gameplay()
         pygame.display.flip()
+
 
     def main(self):
         self.music()
         self.menu_control()
         self.draw_screen()
-        self.gameplay()
 
 main_object = Main()
 
